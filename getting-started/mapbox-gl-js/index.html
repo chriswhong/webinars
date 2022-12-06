@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Display a globe on a webpage</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.js"></script>
+    <script
+        src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+    <link rel="stylesheet"
+        href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css"
+        type="text/css">
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+
+        #map {
+            width: 100%;
+            flex-grow: 1;
+            height: 100%;
+        }
+
+        #container {
+            display: flex;
+            height: 100%;
+
+        }
+
+        #sidebar {
+            width: 300px;
+            flex-shrink: 0;
+            height: 100%;
+            padding: 30px;
+        }
+
+        button {
+            display: block;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <button id="fly-to-coney">Fly to Coney Island</button>
+            <button id="fit-to-queens">Fit to Queens</button>
+
+            <button id="reset-view">Reset</button>
+
+            <button id="toggle-borough-boundaries">Toggle Borough Boundaries</button>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script>
+        const INITIAL_CENTER = [-73.950863, 40.734917]
+        const INITIAL_ZOOM = 9
+        mapboxgl.accessToken = 'pk.eyJ1IjoiY2hyaXN3aG9uZ21hcGJveCIsImEiOiJjbDl6bzJ6N3EwMGczM3BudjZmbm5yOXFnIn0.lPhc5Z5H3byF_gf_Jz48Ug';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/chriswhongmapbox/clbcjmzw4000e14lmuphyfj5p',
+            zoom: INITIAL_ZOOM,
+            center: INITIAL_CENTER, //lng, lat
+            projection: 'globe'
+        });
+
+        // Add the control to the map.
+        map.addControl(
+            new MapboxGeocoder({
+                accessToken: mapboxgl.accessToken,
+                mapboxgl: mapboxgl
+            })
+        );
+
+        const boroughs = [
+            {
+                name: 'Brooklyn',
+                color: '#329649',
+                lngLat: [-73.968815, 40.641509]
+            },
+            {
+                name: 'Manhattan',
+                color: '#329649',
+                lngLat: [-73.969872, 40.777548]
+            },
+            {
+                name: 'Queens',
+                color: '#e3af54',
+                lngLat: [-73.884065, 40.735190]
+            },
+            {
+                name: 'Staten Island',
+                color: '#182ed6',
+                lngLat: [-74.138642, 40.594421]
+            },
+            {
+                name: 'The Bronx',
+                color: '#f2f74d',
+                lngLat: [-73.901795, 40.837730]
+            }
+        ]
+
+        boroughs.forEach(({ name, color, lngLat }) => {
+            const popup = new mapboxgl.Popup({ offset: 25 }).setText(name);
+
+            // add a marker in Central Park
+            new mapboxgl.Marker({
+                scale: 0.55,
+                color,
+            })
+                .setLngLat(lngLat)
+                .setPopup(popup)
+                .addTo(map);
+        })
+
+        // const popup = new mapboxgl.Popup({ offset: 25 }).setText(
+        //     'Central Park'
+        // );
+
+        // // add a marker in Central Park
+        // new mapboxgl.Marker({
+        //     color: '#57fa7d',
+        //     scale: 0.6
+        // })
+        //     .setLngLat([-73.975676,40.768620])
+        //     .setPopup(popup)
+        //     .addTo(map);
+
+
+        map.on('load', () => {
+            // Set the default atmosphere style
+            map.setFog({});
+
+            // add a source and layers for the NYC borough boundaries
+            map.addSource('borough-boundaries', {
+                type: 'geojson',
+                data: 'data/borough-boundaries.geojson',
+                promoteId: 'boro_code'
+            })
+
+            map.addLayer({
+                id: 'borough-boundaries-fill',
+                type: 'fill',
+                source: 'borough-boundaries',
+                paint: {
+                    'fill-color': [
+                        'match',
+                        ['get', 'boro_code'],
+                        1,
+                        'green',
+                        2,
+                        'purple',
+                        3,
+                        'orange',
+                        4,
+                        'yellow',
+                        5,
+                        'pink',
+                        'steelblue'
+                    ],
+                    'fill-opacity': [
+                        'case',
+                        ['boolean', ['feature-state', 'hover'], false],
+                        1,
+                        0.5
+                    ]
+                },
+                layout: {
+                    visibility: 'visible'
+                }
+            })
+
+            map.addLayer({
+                id: 'borough-boundaries-line',
+                type: 'line',
+                source: 'borough-boundaries',
+                paint: {
+                    'line-color': 'white',
+                    'line-width': 4,
+                    'line-opacity': 0.7
+                }
+            })
+
+            map.on('click', (e) => {
+                const [selectedBorough] = map.queryRenderedFeatures(e.point, {
+                    layers: ['borough-boundaries-fill']
+                });
+
+                if (selectedBorough) {
+                    const { boro_name, pop2020 } = selectedBorough.properties
+                    alert(`The population of ${boro_name} is ${pop2020}`)
+                }
+            })
+
+            let hoveredStateId = null
+
+            map.on('mousemove', 'borough-boundaries-fill', (e) => {
+                if (e.features.length > 0) {
+                    if (hoveredStateId !== null) {
+                        map.setFeatureState(
+                            { source: 'borough-boundaries', id: hoveredStateId },
+                            { hover: false }
+                        );
+                    }
+                    hoveredStateId = e.features[0].id;
+                    map.setFeatureState(
+                        { source: 'borough-boundaries', id: hoveredStateId },
+                        { hover: true }
+                    );
+                }
+            });
+
+            map.on('mouseleave', 'borough-boundaries-fill', () => {
+                if (hoveredStateId !== null) {
+                    map.setFeatureState(
+                        { source: 'borough-boundaries', id: hoveredStateId },
+                        { hover: false }
+                    );
+                }
+                hoveredStateId = null;
+            });
+
+        });
+
+        // fly to coney island
+        document.querySelector('#fly-to-coney').addEventListener('click', () => {
+            map.flyTo({
+                center: [-73.985870, 40.572506],
+                zoom: 15,
+                pitch: 45
+            })
+        })
+
+        // reset the map view
+        document.querySelector('#reset-view').addEventListener('click', () => {
+            map.flyTo({
+                center: INITIAL_CENTER,
+                zoom: INITIAL_ZOOM,
+                pitch: 0
+            })
+        })
+
+        // fit to Queens
+        document.querySelector('#fit-to-queens').addEventListener('click', () => {
+            map.fitBounds([
+                [-73.971334, 40.641147], // southwestern corner of the bounds
+                [-73.806980, 40.803824] // northeastern corner of the bounds
+            ]);
+        })
+
+        // toggle borough boundaries
+        document.querySelector('#toggle-borough-boundaries').addEventListener('click', () => {
+            const isVisible = map.getLayoutProperty('borough-boundaries-fill', 'visibility') === 'visible'
+            if (isVisible) {
+                map.setLayoutProperty('borough-boundaries-fill', 'visibility', 'none')
+                map.setLayoutProperty('borough-boundaries-line', 'visibility', 'none')
+
+            } else {
+                map.setLayoutProperty('borough-boundaries-fill', 'visibility', 'visible')
+                map.setLayoutProperty('borough-boundaries-line', 'visibility', 'visible')
+            }
+        })
+    </script>
+
+</body>
+
+</html>
